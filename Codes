@@ -1,0 +1,65 @@
+clc
+close all
+clear all
+
+%% load data and reshape to matrix
+load 17h_17m_35s.mat
+
+field_on = 8;
+field_off = 2;
+
+X_signal = UntitledVoltage_0.Data; % Contains X-Photomultiplier signal
+Y_signal = UntitledVoltage_1.Data; % Contains Y-Photomultiplier signal
+fs = UntitledVoltage_2.Property.wf_samples; % number of samples per sec
+F_state = UntitledVoltage_2.Data; % Shows whether the field was ON or OFF
+F_state = (F_state > 2); % convert to binary (0/1)
+
+Time = size(X_signal,1)/fs; 
+
+X_each = reshape(X_signal, [fs, Time]); %reshape the X-Photomultiplier signal
+Y_each = reshape(Y_signal, [fs, Time]); %reshape the Y-Photomultiplier signal
+F_each = reshape(F_state, [fs, Time]);
+X_on = X_each;
+
+%% Fast Fourier Transform
+Xlen = size(X_each,1);
+Xfv = fft(X_each);
+Xp2 = abs(Xfv/Xlen);
+Xp1 = Xp2(1:Xlen/2+1,:);
+Xp1(2:end-1,:) = 2*Xp1(2:end-1,:);
+Xf = 10^4*(0:(Xlen/2))/Xlen;
+
+%% extract data for feild on and off 
+
+F_s = F_each(1,:);
+t_on = find(F_s==1);
+t_off = find(F_s==0);
+
+
+Xp1_on = Xp1(:,t_on);
+Xp1_off = Xp1(:,t_off);
+
+Xp1_on_max = find(Xp1_on == ones(5001,1)*max(Xp1_on(160:240,:)));
+
+Xp1_off_max = find(Xp1_off == ones(5001,1)*max(Xp1_off(2:15,:)));
+
+%% delete noise 
+figure,
+Xp_on_threshold = 1;
+Xp1_on_max(find(max(Xp1_on(160:240,:))<Xp_on_threshold)) = NaN;
+Xp1_on_max= mod(Xp1_on_max,5001);
+plot(t_on,Xp1_on_max,'ko');
+xlabel('Time(s)');
+ylabel('Frequency(Hz)');
+title('Field on');
+box on;
+
+figure,
+Xp_off_threshold = 1;
+Xp1_off_max(find(max(Xp1_off(2:15,:))<Xp_off_threshold)) = NaN;
+Xp1_off_max= mod(Xp1_off_max,5001);
+plot(t_off,Xp1_off_max,'ko');
+xlabel('Time(s)');
+ylabel('Frequency(Hz)');
+title('Field off');
+box on;
