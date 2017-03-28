@@ -1,0 +1,75 @@
+clc
+close all
+clear all
+
+fileName = '2_dated_2-25.avi';  
+obj = VideoReader(fileName);
+numFrames = obj.NumberOfFrames;
+file=cell(numFrames,1);
+ for k = 1 : numFrames
+     frame = read(obj,k);
+     frame=mean(frame,3);
+     file(k)={frame};
+%      imshow(frame);
+%      imwrite(frame,strcat(num2str(k),'.jpg'),'jpg');%
+ end
+
+ %% find position
+ pos=zeros(numFrames,2); %center of cell 
+threshold=65; 
+for i=1:numFrames
+    pic=cell2mat(file(i));
+    pos(i,:)=center(pic,threshold);
+end
+
+%%
+T = obj.Duration/numFrames;             % Sampling period
+Fs = 1/T;            % Sampling frequency
+L = numFrames;             % Length of signal
+t = (0:L-1)*T;        % Time vector
+%Posfft=fft(pos);
+wlet = 'morse';              % name of the mother wavelet
+%cwt(pos(:,1),wlet,Fs,'TimeBandwidth',60,'VoicesPerOctave',48);
+% Got abs of coefficients for both X signals and Y signals. Plus them.
+%[coefsx, freqx] = cwt(pos(:,1),wlet,Fs,'TimeBandwidth',60,'VoicesPerOctave',48); 
+[coefsx, freqx] = cwt(pos(:,1),wlet,Fs,'TimeBandwidth',60,'VoicesPerOctave',48); 
+coepow=abs(coefsx);
+
+x=(linspace(0,size(coepow,2)/Fs,size(coepow,2)));
+y=freqx;
+[X Y]=meshgrid(x,y);
+
+   figure;
+   surf(X, Y,coepow,'LineStyle','none');
+   c=colorbar;
+   c.Label.String = 'Intensity';
+  % c.Limits=[3 8];
+  
+  set(gca,'Clim',[3 6]);
+  xlabel('Time (s)');
+  ylabel('Frequency (Hz)');
+ % name=[my_title ',' filename];
+ % title(name);
+  axis tight;
+
+  %% peak finder
+        peak=wltpeakfinder(coepow,3,1);
+        real_peak=[];
+        tt = isnan(peak);
+        for i=1: length(peak)
+        if tt(i) == 0
+            scale= peak(i);
+            real_peak(i)= freqx(scale);     
+        else  real_peak(i)= nan;
+        end
+        end
+        
+        f=(real_peak)';
+        nanpos=isnan(f);
+        nanpos=find(nanpos==1);
+        f(nanpos)=0;
+        sss=zeros(1,size(coepow,2));
+        z=10*ones(1,length(peak));
+        hold on;
+       % timescale = linspace(1,length(peak),length(peak));
+        plot3(x,real_peak,z,'.','color','k','MarkerSize',8);
