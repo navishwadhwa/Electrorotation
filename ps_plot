@@ -1,0 +1,50 @@
+function y= ps_plot(peak,real_peak,pottsL2,step_modified,freq_int,Inter,real_time,label_step,minfre,maxfre,file_name)
+
+         pottsL3 = pottsL2;
+        tt = find(pottsL3>= max(freq_int) | pottsL3<=min(freq_int));
+        pottsL3(tt)=nan;
+        
+        
+        tt = find(step_modified>= max(freq_int) | step_modified<=min(freq_int));
+        step_modified(tt)=nan;
+   
+         tt = find(pottsL3>= maxfre | pottsL3<=minfre);
+        pottsL3(tt)=nan;
+        
+        
+        tt = find(step_modified>= maxfre | step_modified<=minfre);
+        step_modified(tt)=nan;
+        
+        
+        z=10*ones(1,length(peak));
+        hold on;
+        timescale = linspace(1,length(peak),length(peak));
+        plot3(timescale,real_peak,z,'.','color','k','MarkerSize',8);
+         plot3(timescale,pottsL3,z,'g--.', 'MarkerSize', 10);
+         plot3(timescale,step_modified,z,'r--.', 'MarkerSize', 10);
+%         %errorbar(timescale,step_modified,err);
+%         plot lines;
+        yline=[min(freq_int) max(freq_int)];
+        zline=[20 20];
+        xline=[0 0];
+hold on; 
+% for i=1:length(Inter)
+%     plot3(xline+Inter(i),yline,zline,'--w');
+% end
+
+         legend('Intensity of WT','Peak','Step','Step Modified');
+  %legend('Intensity of WT','Peak');
+  
+        axis tight;
+        
+%set x labels
+
+        hold on;
+  set(gca,'xtick',[]);
+  set(gca,'xtick',[1:label_step:length(timescale)]);
+  set(gca,'xticklabel',{real_time(1:length(real_time)/((length(timescale)-1)/label_step):end)});  
+  %plot_name = strcat(file_name(1:end-4),'.pdf');
+  %saveas(gcf,plot_name);
+    
+    
+end
