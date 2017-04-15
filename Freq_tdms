@@ -276,12 +276,12 @@ lengthFiles=length(Files);
     A2 = axes('position',[0.56 0.2 0.4 0.6]);
     set(gcf,'CurrentAxes',A1)
     wavelet_spectum(all_off_coepow(:,1:d_sample_off:end),freq_off,'Dissociation',fileName);
-    ps_plot(peak_off,real_peak_off,pottsL2_off,step_modified_off,freq_off,Insert_off,real_off_time,1,0,14,fileName,0);
+    ps_plot(peak_off,real_peak_off,pottsL2_off,step_modified_off,freq_off,Insert_off,real_off_time,5,0,14,fileName,0);
     view([0 90]);
     
     set(gcf,'CurrentAxes',A2)
     wavelet_spectum(all_rec_coepow(:,1:d_sample_rec:end),freq_rec,'Recovery',fileName);
-    ps_plot(peak_rec,real_peak_rec,pottsL2_rec,step_modified_rec,freq_rec,Insert_rec,real_rec_time,15,0,14,fileName,1);
+    ps_plot(peak_rec,real_peak_rec,pottsL2_rec,step_modified_rec,freq_rec,Insert_rec,real_rec_time,10,0,14,fileName,1);
     view([0 90]);
     
     set(gcf,'PaperType','A4')
