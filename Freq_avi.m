@@ -1,5 +1,6 @@
 % This is a ".m" file to determine the frequency among time domain for avi
-% files. To determine the steps, pottslab package is
+% files. Use the "simpleConvertTDMS.m" or "ConvertTDMS.m" first to convert
+% the TDMS files to mat format. To determine the steps, pottslab package is
 % used here so JavaPath should be set first by run the "installPottslab.m"
 % in the "Pottslab0.5" folder.This version include analysis of dissociation
 % and recovery periods.
