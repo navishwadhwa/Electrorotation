@@ -1,4 +1,4 @@
-function out=stepmodify(step,thresh,jumpmax)
+function out=stepmodify(step,thresh,dmin)
 step(find(isnan(step)==1))=0;
 %% thresh max
 % dvalue=diff(step);
@@ -24,9 +24,9 @@ d=diff(step); % differentiate distance with each two adjacent steps;
 %step = smooth1(step,jumpmax);
 jump=find(d~=0)'; % Find positions are not the same.
 dis=diff(jump);
-pos=jump(find(dis==1))+1;
+pos=find((dis<=dmin));
 for i =1 : length(pos)
-step(pos(i))=step(pos(i)-1);
+step(jump(pos(i))+1:jump(pos(i)+1))=step(jump(pos(i)));
 end
 stepl=[1; jump(1:end-1)+1]; % each step starting point
 stepr=[jump; length(step)]; % each step ending point
