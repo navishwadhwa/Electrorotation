@@ -294,7 +294,7 @@ lengthFiles=length(Files);
     set(gcf,'CurrentAxes',A1)
     spec_sampling=100;
     wavelet_spectum(all_off_coepow(:,1:spec_sampling:end),freq_off,'Dissociation',fileName);
-    ps_plot(spec_sampling,OFF_periods,peak_off,real_peak_off,pottsL2_off,step_modified_off,freq_off,Insert_off,real_time_off,size(ON_pairs,1)/3,0,14,fileName,0);
+    ps_plot(spec_sampling,OFF_periods,peak_off,real_peak_off,pottsL2_off,step_modified_off,freq_off,Insert_off,real_time_off,size(ON_pairs,1)/2,0,14,fileName,0);
     view([0 90]);
     
     set(gcf,'CurrentAxes',A2)
@@ -313,5 +313,4 @@ lengthFiles=length(Files);
     saveas(gcf,plot_name)
   
    end;
-
 
