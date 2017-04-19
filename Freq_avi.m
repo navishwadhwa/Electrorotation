@@ -1,4 +1,4 @@
-% This is a ".m" file to determine the frequency among time domain for tdms
+% This is a ".m" file to determine the frequency among time domain for avi
 % files. Use the "simpleConvertTDMS.m" or "ConvertTDMS.m" first to convert
 % the TDMS files to mat format. To determine the steps, pottslab package is
 % used here so JavaPath should be set first by run the "installPottslab.m"
@@ -15,302 +15,278 @@ warning('off', 'MATLAB:colon:nonIntegerIndex')
 % analyzed for freq. Use current working directory as a starting point.
 
 start_path=pwd;
-folder_name = uigetdir(start_path,'Select folder containing .mat files to be analyzed:');
+folder_name = uigetdir(start_path,'Select folder containing data files to be analyzed:');
 cd(folder_name)
 %----------------------------------------------------------------
 
 %Collect a list of all the files in the current directory
-Files=dir('*s.mat');
-
+Video_Files=dir('*.avi');
+Tdms_Files=dir('*s.mat');
 %Measure how long the list of files is
-lengthFiles=length(Files);
-
-
+lengthFiles=length(Video_Files);
+% for i=1: length(Video_Files)
+% Video_Files(i).num=str2num(Video_Files(i).name(1:end-4));
+% end
 %% Run for each data file separately
 
    for kk = 1:lengthFiles
     %clearvars -except kk Files lengthFiles folder_name
     clc;
- 
-    
-    file_name = Files(kk).name;
-    path_name = strcat(folder_name,'\',file_name);
-    
-    %delete "_" in the file name.
-    
-    
-    %Load the mat file containing the data. Eventually this should be in a loop
-    %going through all files in a cerain folder(s).
-    load(path_name)
-    fileName = file_name;
-    fileName(find(fileName==char('_')))=[];
-    
-   %% --------------%% Start the main codes %%---------------------------------------
-    %% Load measured parameters and arrange them to pairs.
-    
-    X_signal = UntitledVoltage_0.Data; % Contains X-Photomultiplier signal
-    Y_signal = UntitledVoltage_1.Data; % Contains Y-Photomultiplier signal
-    fs = UntitledVoltage_2.Property.wf_samples; % number of samples per sec
+%% load information of the video.
+%h=waitbar(0,'Loading video, please wait...');
+video_name = Video_Files(kk).name;
+video_path = strcat(folder_name,'\',video_name);
+obj = VideoReader(video_path); %read the objects
+% get the height and width for the video
+vidHeight = obj.Height;
+vidWidth = obj.Width;
+% set a struct for store the data
+s = struct('cdata',zeros(vidHeight,vidWidth,3,'uint8'),...
+    'graydata',zeros(vidHeight,vidWidth,1,'uint8'),...
+    'denoi_graydata',zeros(vidHeight,vidWidth,1,'uint8'),...
+    'dvalue',zeros(vidHeight,vidWidth,1,'double'));
+   numFrame = 1; 
+
+while hasFrame(obj)
+    %waitbar(numFram/)
+    s(numFrame).cdata = readFrame(obj);
+    s(numFrame).graydata = rgb2gray(s(numFrame).cdata); % convert rgb to gray image
+    % use the averaging filter mode to denoise the image
+    s(numFrame).denoi_graydata = filter2(fspecial('average',7),s(numFrame).graydata)/255; 
+   %s(numFrame).bwdata = imbinarize(s(numFrame).denoi_graydata,thre);
+   
+    % convert the unit8 format to double for the gray image
+    s(numFrame).dvalue = im2double(s(numFrame).denoi_graydata);
+    numFrame = numFrame+1;
+end
+numFrame = numFrame-1; % minus one since count one more for the number of Frame
+
+    %% Load related tdms for the video and get the information of the fields state.    
+    %waitbar(1,'Loading the tdms files, please wait...');
+    related_tdms= Tdms_Files(kk).name;
+    tdms_path = strcat(folder_name,'\',related_tdms);
+    load(tdms_path);
+    related_tdms(find(related_tdms==char('_')))=[];
+    fs = UntitledVoltage_2.Property.wf_samples; % sampling frequency of tdms
     F_state = UntitledVoltage_2.Data; % Shows whether the field was ON or OFF
     F_state = (F_state > 2); % convert to binary (0/1)
-    
     Switch = diff(F_state); % find if the field was switched
     OnOff = find(Switch); % Indices of the switching data points
-    
     %Define pairs in sample numbers describing the times when the field was on
     %and off. The first column is when the event startes and the second when it
-    %ended. Frequency calculated between these two.
-    
+    %ended. Frequency calculated between these two.    
     ON_pairs = [OnOff(1:2:end) OnOff(2:2:end)];
     OFF_pairs = [OnOff(2:2:end-2) OnOff(3:2:end)];
-    
-    numoff=size(OFF_pairs,1);
-    if numoff>=3
-        numoff=3;
-    end
-    numon=size(ON_pairs,1);
-    if numon>=3
-        numon=3;
-    end
-    ON_cnt = (ON_pairs(numon,2)-ON_pairs(numon,1)); % # samples in each ON event
-    
-    %some data need (OFF_pairs(1,2)-OFF_pairs(1,1))
-    OFF_cnt = (OFF_pairs(numoff,2)-OFF_pairs(numoff,1)); % # samples in each OFF event 
-    
+    ON_cnt = (ON_pairs(3,2)-ON_pairs(3,1)); % # samples in each ON event
 
+    %!!!Notice!!! : some data need (OFF_pairs(1,2)-OFF_pairs(1,1))
+    OFF_cnt = (OFF_pairs(3,2)-OFF_pairs(3,1)); % # samples in each OFF event 
+    
     % The matrix above missed the last OFF event immediately following the last
     % ON event and before the recovery starts (two seconds after the last ON).
     % Adding that bit to the Off_pairs here.
     rec_flag = 0;
     if size(F_state,1)-ON_pairs(end,2)>OFF_cnt && F_state(end)==0
         %some data need (OFF_pairs(1,2)-OFF_pairs(1,1))
-        OFF_pairs = vertcat([1 OnOff(1)],OFF_pairs,[OnOff(end) OnOff(end)+(OFF_pairs(numoff,2)-OFF_pairs(numoff,1))]);
+        OFF_pairs = vertcat([1 OnOff(1)],OFF_pairs,[OnOff(end) OnOff(end)+(OFF_pairs(3,2)-OFF_pairs(3,1))]);
         rec_flag = 1;
     elseif size(F_state,1)-ON_pairs(end,2)<OFF_cnt && F_state(end)==0
         OFF_pairs = vertcat([1 OnOff(1)],OFF_pairs);
     else
         OFF_pairs = vertcat([1 OnOff(1)],OFF_pairs);
     end
-     
-    
-    
-    %% ------------- %% Dissociation Periods %% --------------------------
-     %% prepare the parameter
-     OFF_periods= (OFF_pairs-1)./fs;
-     peak_sampling_off = 1e2; % The resolution of peak finding step.
-     Scale_min=0;  % Set the minimum of frequency to 0 first, and search a proper one in the following steps
-     Scale_max=1e7; % Set the maximum of frequency to a large value first, and search a proper one in the following steps
-     all_off_coepow=[];% Collect all coefficients of wavelet tranform for the dissociation periods.
-     real_time_off=[]; % Arrange the real time.
-     Npairs = size(OFF_pairs,1); % Numbers of off pairs.
-     peak_off=[]; %peak found by peak finder in the coefficients of wavelet transform.
-     real_peak_off=[];%corresponding real frequency value for peak 
-     pottsL2_off=[]; %Step finder.         
-     h=waitbar(0,'Dealing with dissocation periods. Please wait...') %show a time bar
-     Insert_off=[]; % Inserted lines for different periods.
-     freq_max_off = 20;
-     %% WT and peak\step finding for dissocation
-     for ii=1: Npairs
-         waitbar(ii/Npairs);   %Define the process of the bar
-         
-         %Get the "chunk" of data for this computation
-         X_chunk = X_signal(OFF_pairs(ii,1):OFF_pairs(ii,2));  
-         Y_chunk = Y_signal(OFF_pairs(ii,1):OFF_pairs(ii,2)); 
-         wlet = 'morse';   % name of the mother wavelet
-         % Got abs of coefficients for both X signals and Y signals. Plus them.
-        [coefsx, freqx] = cwt(X_chunk,wlet,fs,'TimeBandwidth',60,'VoicesPerOctave',48); 
-        [coefsy, freqy] = cwt(Y_chunk,wlet,fs,'TimeBandwidth',60,'VoicesPerOctave',48); 
-        coepow=abs(coefsx)+abs(coefsy);
-        
-        %since the first cycle for dissociation is the original periods
-        %, the scale is defferent with the following
-        if (ii>1) &&(length(freqx)<size(all_off_coepow,1))
-            all_off_coepow(length(freqx)+1:end,:)=[];
-        else if (ii>1) && (length(freqx)>size(all_off_coepow,1))
-            coepow(size(all_off_coepow,1)+1:end,:)=[];
-            end
-        end      
-            
-        all_off_coepow = [all_off_coepow coepow];
-        
-        %find the real time 
-        tt=linspace(OFF_periods(ii,1),OFF_periods(ii,2),OFF_pairs(ii,2)-OFF_pairs(ii,1)+1); % get the real time
-        real_time_off=[real_time_off tt];
-        %calculate the inter line
-        Insert_off=[Insert_off length(real_time_off)]; 
-        %find the minimum and maximum of scale (set the maxiumum of the frequency is 16Hz,or another proper one)
-        Scale_min=max(Scale_min,find(freqx>freq_max_off, 1, 'last' ));
-        Scale_max=min(Scale_max,length(freqx));
-     end
-         % delete useless value of coefficients   
-       all_off_coepow(Scale_max+1:end,:)=[];
-       all_off_coepow(1:Scale_min-1,:)=[];
-       Insert_off=[0 Insert_off]; % insert the start time.
-       Insert_off(end)=[];
-       % select the frequency used 
-       freq_off =freqx(Scale_min:1:Scale_max);
-        % Set the zero of frequency and wavelet spectrum.
-        %Use wltpeakfinder function to find the step.
-        % a modified peakfinder function, which can find the frequency with
-        % maximum intensity at each instant in the wavelet transform graph
-        % Parameter 1: wavelet transform result;
-        % Parameter 2: threshold for the relative height of the peak: small
-        % value means large threshold
-        % Parameter 3: threshold for the peakfinder(): the peak has to be higher than it    
-       peak_off=wltpeakfinder(all_off_coepow(:,1:peak_sampling_off:end),3,2.3)+Scale_min-1;
-       
-       % correspond to real value of peak
-       peaknan = isnan(peak_off);
-        for i=1: length(peak_off)
-        if peaknan(i) == 0  
-            real_peak_off(i)= freqx(peak_off(i));     
-        else  real_peak_off(i)= 0; %if the peak is not found, in the mostly situation the cell stops
-        end
-        end
-        
-      
-        freq_off=[freq_off;0];
-        zeroline=zeros(1,size(all_off_coepow,2));
-        all_off_coepow=[all_off_coepow;zeroline];  
-        % minL2Potts: A function uses potts model.
-        % Parameter 1: data
-        % Parameter 2: level of peak. The bigger number will be more coarse.
-        pottsL2_off = minL2Potts(real_peak_off, 20);
-        zeropos=find(pottsL2_off==0);
-        pottsL2_off(zeropos)=nan;
-        % for i=1:length(nanpo)
-        %     tt=1;
-        %     while isnan(pottsL2(nanpo(i)-tt)) 
-        %         tt=tt+1;
-        %     end
-        % pottsL2(nanpo(i)) = pottsL2 (nanpo(i)-tt);
-        % end
-        
-        % modify the step by "stepmodify" function. The second parameter is the thresh which considered as
-        %the same steps;
-        step_modified_off = stepmodify(pottsL2_off,0.3,4);
-        step_modified_off(find(step_modified_off==0))=nan;
-       %step_modified_off = pottsL2_off;
-%         nanjud = isnan(pottsL2_off);
-%         nanpo = find(nanjud==1);
-    %% ------------- %% Recovery Periods  %% ----------------------------     
-        %Recovery starts when the final OFF event ends, until the end of sampling.
-        %Divided that section of the data into chunks of the same size as OFF
-        %events for frequency calculation. Then the same parameters as OFF can be
-        %used for REC.
-        if rec_flag == 1
-           % Set parameters
-          
-           peak_sampling = 1e2; % The resolution selected of peak finding step.
-           Scale_min=0;  % Set the minimum of frequency to 0 first, and search a proper one in the following steps
-           Scale_max=1e7; % Set the maximum of frequency to a large value first, and search a proper one in the following steps
-           real_time_rec =[]; % Arrange the real time.
-           all_rec_coepow=[]; % Collect all coefficients of wavelet tranform for the recovery periods.
-           peak_rec=[]; %peak found by peak finder in the coefficients of wavelet transform.
-           real_peak_rec=[]; %corresponding real frequency value for peak
-           pottsL2_rec=[]; %Step value.         
-           h=waitbar(0,'Dealing with Recovery periods. Please wait...') %show a time bar
-           Insert_rec=[]; % Insterted lines for different periods.
-           REC_array = OFF_pairs(end,2):OFF_cnt:size(X_signal,1);
-           REC_pairs = [REC_array(1:end-1)' REC_array(2:end)'];
-           REC_periods=REC_pairs./fs;
-           Npairs = size(REC_pairs,1);
-           freq_max_rec = 20;
-     %% WT and peak\step finding for recovery    
-    for ii = 1:Npairs
-         waitbar(ii/Npairs);   %Define the process of the bar
-         %Get the "chunk" of data for this computation
-         X_chunk = X_signal(REC_pairs(ii,1):REC_pairs(ii,2));    
-         Y_chunk = Y_signal(REC_pairs(ii,1):REC_pairs(ii,2));     
-         wlet = 'morse';   % name of the mother wavelet
-         % Got abs of coefficients for both X signals and Y signals. Plus them.
-        [coefsx, freqx] = cwt(X_chunk,wlet,fs,'TimeBandwidth',60,'VoicesPerOctave',48);
-        [coefsy, freqy] = cwt(Y_chunk,wlet,fs,'TimeBandwidth',60,'VoicesPerOctave',48);
-        % Got abs of coefficients for both X signals and Y signals. Plus them.
-        coepow=abs(coefsx)+abs(coefsy);
-        all_rec_coepow = [all_rec_coepow coepow];%Collect all the coefficients of wavelet transform.
-        tt=linspace(REC_periods(ii,1),REC_periods(ii,2),REC_pairs(ii,2)-REC_pairs(ii,1)+1); % get the real time
-        %List all the real time.
-        real_time_rec=[real_time_rec tt];
-        Insert_rec=[Insert_rec length(real_time_rec)]; 
-        %find the minimum and maximum of scale (set the maxiumum of the frequency is 16Hz,or another proper one)
-        Scale_min=max(Scale_min,find(freqx>freq_max_rec, 1, 'last' ));
-        Scale_max=min(Scale_max,length(freqx));
-    end
-       % delete useless value of coefficients
-       all_rec_coepow(1:Scale_min-1,:)=[];
-       all_rec_coepow(Scale_max+1:end,:)=[];
-       % select the frequency used
-       freq_rec =freqx(Scale_min:1:Scale_max);
-       % find the peak by wltpeakfinder function
-       peak_rec=wltpeakfinder(all_rec_coepow(:,1:peak_sampling:end),3,2)+Scale_min-1;
-       
-       % correspond to real value of peak
-       peaknan = isnan(peak_rec);
-        for i=1: length(peak_rec)
-        if peaknan(i) == 0 
-            real_peak_rec(i)= freqx(peak_rec(i));    %%freqx or freq_rec?
-        else  real_peak_rec(i)= 0; %if the peak is not found, in the mostly situation the cell stops
-        end
-        end
-        
-%         f=(real_peak_rec)';
-%         nanpos=isnan(f);
-%         nanpos=find(nanpos==1);
-%         f(nanpos)=0;
+     % get REC pairs
+     REC_array = OFF_pairs(end,2):OFF_cnt:size(F_state,1);
+     REC_pairs = [REC_array(1:end-1)' REC_array(2:end)'];
 
-        % Set the zero of frequency and wavelet spectrum.
-        freq_rec=[freq_rec;0];
-        zeroline=zeros(1,size(all_rec_coepow,2));
-        all_rec_coepow=[all_rec_coepow;zeroline];  
+% Since the sampling frequency between two files is different, get the real second for each pairs     
+OFF_pairs=((OFF_pairs-1)./fs);
+REC_pairs = ((REC_pairs-1)./fs);
+
+
+ %% Tracking the center of the cell in the video
+waitbar(3,'Loading the tdms files, please wait...');
+pos=zeros(numFrame,2); %two columns, the first is x position, the second is y position.
+thre=0.2; % the threshhold for center calculating 
+for i=1:numFrame
+    pic=s(i).dvalue;
+    pos(i,:)=center(pic,thre); % center is a customed function to find the center of the cell in the image.
+end
+
+%% Apply wavelet transform 
+value_min=2;
+T = obj.Duration/numFrame;             % Sampling period
+Fs = 1/T;            % Sampling frequency of video
+L = numFrame;             % Length of signal
+t = (0:L-1)*T;        % Time vector
+wlet = 'morse';              % name of the mother wavelet
+Scale_min=0;  % Set the minimum of frequency to 0 first, and search a proper one in the following steps
+Scale_max=1e7; % Set the maximum of frequency to a large value first, and search a proper one in the following steps
+    
+% Got abs of coefficients for both X signals and Y signals. Plus them.
+[coefsx, freqx] = cwt(pos(:,1),wlet,Fs,'TimeBandwidth',60,'VoicesPerOctave',48); 
+[coefsy, freqy] = cwt(pos(:,2),wlet,Fs,'TimeBandwidth',60,'VoicesPerOctave',48);
+Scale_min=max(Scale_min,find(freqx>20, 1, 'last' ));
+Scale_max=min(Scale_max,length(freqx));
+coepow=abs(coefsy)+abs(coefsx);
+coepow(Scale_max+1:end,:)=[];
+coepow(1:Scale_min-1,:)=[];
+freq =freqx(Scale_min:1:Scale_max);
+%% Dealing with dissociation period
+OFF_period=zeros(size(OFF_pairs,1),2); % OFF pairs in the video 
+coepow_off=[]; % store the coefficients of WT for dissociation 
+real_time_off=[]; % correspond the real time for each period
+inter_off=[]; % dashed lines inserted to denote each period
+
+for i=1: size(OFF_pairs,1)
+OFF_period(i,1) = find((t>=OFF_pairs(i,1)),1,'first'); % find the start point for OFF period i
+OFF_period(i,2) = find((t<=OFF_pairs(i,2)),1,'last'); % find the end poingt for OFF period i
+coepow_off=[coepow_off coepow(:,OFF_period(i,1):OFF_period(i,2))]; % get the coefficients for the OFF period i
+tt=linspace(OFF_pairs(i,1),OFF_pairs(i,2),OFF_period(i,2)-OFF_period(i,1)+1); % get the real time
+real_time_off=[real_time_off tt]; % collect real time for fields off
+inter_off=[inter_off length(real_time_off)]; % collect lines position 
+end;
+ inter_off=[0 inter_off]; % insert the start time.
+ inter_off(end)=[];
+ %% peak finder for OFF
+        value_min=3; % threshold of peak
+        peak_sampling_off= 1; % sampling frequency for peak finder
+        real_peak_off=[];
+        % a customed function for peak finder
+        peak_off=wltpeakfinder(coepow_off(:,1:peak_sampling_off:end),3,value_min);
+       
+        % correspond the real value of peaks for the WT scale
+        tt = isnan(peak_off);
+        for i=1: length(peak_off)
+        if tt(i) == 0
+            scale= peak_off(i);     
+            real_peak_off(i)= freq(scale);     
+        else  real_peak_off(i)= 0;
+        end
+        end
+ 
+%% Dealing with recovery period
+REC_period=zeros(size(REC_pairs,1),2); % REC pairs in the video 
+coepow_rec=[]; % store the coefficients of WT for recovery 
+real_time_rec=[]; % correspond the real time for each period
+inter_rec=[];
+for i=1: size(REC_pairs,1)
+REC_period(i,1) = find((t>=REC_pairs(i,1)),1,'first'); % find the start point for REC period i
+REC_period(i,2) = find((t<=REC_pairs(i,2)),1,'last'); % find the end poingt for REC period i
+coepow_rec=[coepow_rec coepow(:,REC_period(i,1):REC_period(i,2))]; % get the coefficients for the REC period i
+tt=linspace(REC_pairs(i,1),REC_pairs(i,2),REC_period(i,2)-REC_period(i,1)+1); % get the real time
+real_time_rec=[real_time_rec tt]; % collect real time for fields recovery
+inter_rec=[inter_rec length(real_time_rec)]; % collect lines position 
+end;
+
+
+
+ %% peak finder for REC
+        value_min=3; % threshold of peak
+        peak_sampling_rec= 20; % sampling frequency for peak finder
+        real_peak_rec=[];
+        % a customed function for peak finder
+        peak_rec=wltpeakfinder(coepow_rec(:,1:peak_sampling_rec:end),3,value_min);
+       
+        % correspond the real value of peaks for the WT scale
+        tt = isnan(peak_rec);
+        for i=1: length(peak_rec)
+        if tt(i) == 0
+            scale= peak_rec(i);     
+            real_peak_rec(i)= freq(scale);     
+        else  real_peak_rec(i)= 0;
+        end
+        end
+                
         
-        % A function uses potts model. 
-        % Parameter 1: data
-        % Parameter 2: level of peak. The bigger number will be more coarse.
-        pottsL2_rec = minL2Potts(real_peak_rec, 70);
-        zeropos=find(pottsL2_rec==0);
-        pottsL2_rec(zeropos)=nan;
-        
-   %Exclude NaN first
-   %Modify the steps. The second parameter is the thresh which considered as
-   %the same steps;
-%         nanjud = isnan(pottsL2_rec);
-%         nanpo = find(nanjud==1);
-% for i=1:length(nanpo)
-%     tt=1;
-%     while isnan(pottsL2(nanpo(i)-tt)) 
-%         tt=tt+1;
-%     end
-% pottsL2(nanpo(i)) = pottsL2 (nanpo(i)-tt);
-% end
-   step_modified_rec = stepmodify(pottsL2_rec,1,5);
-   step_modified_rec(find(step_modified_rec==0))=nan;
-   end;
-   
-   %% Plot the dissociation and recovery parts together
-    h = figure;
+%% plot the figure 
+ h = figure;
     A1 = axes('position',[0.08 0.2 0.4 0.6]);
     A2 = axes('position',[0.56 0.2 0.4 0.6]);
-    set(gcf,'CurrentAxes',A1)
-    spec_sampling=100;
-    wavelet_spectum(all_off_coepow(:,1:spec_sampling:end),freq_off,'Dissociation',fileName);
-    ps_plot(spec_sampling,OFF_periods,peak_off,real_peak_off,pottsL2_off,step_modified_off,freq_off,Insert_off,real_time_off,size(ON_pairs,1)/2,0,14,fileName,0);
-    view([0 90]);
-    
-    set(gcf,'CurrentAxes',A2)
-    wavelet_spectum(all_rec_coepow(:,1:spec_sampling:end),freq_rec,'Recovery',fileName);
-    ps_plot(spec_sampling,REC_periods,peak_rec,real_peak_rec,pottsL2_rec,step_modified_rec,freq_rec,Insert_rec,real_time_rec,size(REC_pairs,1)/4,0,14,fileName,1);
-    view([0 90]);
-    
-    set(gcf,'PaperType','A4')
+
+%% Dissociation 
+% set the grid for the wavelet spectrum
+spec_sampling=1; % sampling frequency for the wavelet spectrum
+
+set(gcf,'CurrentAxes',A1)
+x=(linspace(1,size(coepow_off(:,1:spec_sampling:end),2),size(coepow_off(:,1:spec_sampling:end),2)));
+y=freq(1:end);
+[X Y]=meshgrid(x,y);
+
+   % plot wavelet spectrum
+   surf(X, Y,coepow_off(:,1:spec_sampling:end),'LineStyle','none');
+   c=colorbar;
+   c.Label.String = 'Intensity';
+   set(gca,'Clim',[value_min 6]);
+   %plot period lines
+  xlabel('Time (s)');
+  ylabel('Frequency (Hz)');
+  name=['Dissociation' ',' related_tdms];
+  title(name);
+  axis tight;
+ % set x label for each pr
+  label_step=size(OFF_pairs,1)/8; % the interbal of x axis label for off periods.
+   % plot peak  
+  inter_off=inter_off./spec_sampling;
+  z=40*ones(1,length(peak_off));
+  hold on;
+  peaknum = linspace(1,length(peak_off),length(peak_off));
+  plot3(peaknum(1:end),real_peak_off(1:end),z(1:end),'.','color','k','MarkerSize',8);
+  legend('Intensity of WT','Peak','Location','best');
+  set(gca,'xtick',[]);
+  set(gca,'xtick',inter_off(1:label_step:end));
+  set(gca,'xticklabel',{floor(OFF_pairs(1:label_step:end,1))});  
+    yline=[min(freq) max(freq)];
+   zline=[20 20];
+   xline=[0 0];
+   hold on; 
+for i=1:length(inter_off)
+    plot3(xline+inter_off(i),yline,zline,'--w');
+end
+  view([0 90]);
+%% Recovery
+% set the grid for the wavelet spectrum
+set(gcf,'CurrentAxes',A2)
+spec_sampling=20; % sampling frequency for the wavelet spectrum
+x=(linspace(1,size(coepow_rec(:,1:spec_sampling:end),2),size(coepow_rec(:,1:spec_sampling:end),2)));
+y=freq(1:end);
+[X Y]=meshgrid(x,y);
+
+
+   % plot wavelet spectrum
+   surf(X, Y,coepow_rec(:,1:spec_sampling:end),'LineStyle','none');
+   c=colorbar;
+   c.Label.String = 'Intensity';
+   set(gca,'Clim',[value_min 6]);
+   
+  xlabel('Time (s)');
+  ylabel('Frequency (Hz)');
+  name=['Recovery' ',' related_tdms];
+  title(name);
+  axis tight;
+ % set x label for each pr
+
+ % plot peak  
+  z=40*ones(1,length(peak_rec));
+  inter_rec=inter_rec./spec_sampling;
+  hold on;
+  peaknum = linspace(1,length(peak_rec),length(peak_rec));
+  plot3(peaknum(1:end),real_peak_rec(1:end),z(1:end),'.','color','k','MarkerSize',8);
+  view([0 90]);
+  legend('Intensity of WT','Peak','Location','best');
+  label_step=size(REC_pairs,1)/4;% the interbal of x axis label for off periods.
+  set(gca,'xtick',[]);
+  set(gca,'xtick',inter_rec(1:label_step:end));
+  set(gca,'xticklabel',{floor(REC_pairs(1:label_step:end,1))});  
+
+% save png file  
+set(gcf,'PaperType','A4')
     set(gcf,'PaperUnits','centimeters')
     xSize = 28; ySize = 15;
     xLeft = (30-xSize)/2; yTop = (21-ySize)/2;
     set(gcf,'PaperPosition',[xLeft yTop xSize ySize])
     set(gcf,'Position',[100 100 xSize*50 ySize*50])
     set(gcf,'PaperOrientation','landscape');
-    plot_name = strcat(file_name(1:end-5),'.png');
+    plot_name = strcat(related_tdms(1:end-4),'video.png');
     saveas(gcf,plot_name)
-  
-   end;
-
+   end  
