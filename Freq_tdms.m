@@ -31,7 +31,7 @@ lengthFiles=length(Files);
    for kk = 1:lengthFiles
     %clearvars -except kk Files lengthFiles folder_name
     clc;
- 
+  
     
     file_name = Files(kk).name;
     path_name = strcat(folder_name,'\',file_name);
