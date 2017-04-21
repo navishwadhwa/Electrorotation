@@ -7,7 +7,7 @@
 
 clc;
 close all;
-clear all;
+clear;
 %% Load Data by setting path and selecting data folder
 warning('off', 'MATLAB:colon:nonIntegerIndex')
 
@@ -102,12 +102,14 @@ numFrame = numFrame-1; % minus one since count one more for the number of Frame
 % Since the sampling frequency between two files is different, get the real second for each pairs     
 OFF_pairs=((OFF_pairs-1)./fs);
 REC_pairs = ((REC_pairs-1)./fs);
+ON_pairs=((ON_pairs-1)./fs);
+
 
 
  %% Tracking the center of the cell in the video
 waitbar(3,'Loading the tdms files, please wait...');
 pos=zeros(numFrame,2); %two columns, the first is x position, the second is y position.
-thre=0.2; % the threshhold for center calculating 
+thre=0.25; % the threshhold for center calculating 
 for i=1:numFrame
     pic=s(i).dvalue;
     pos(i,:)=center(pic,thre); % center is a customed function to find the center of the cell in the image.
@@ -132,15 +134,31 @@ coepow=abs(coefsy)+abs(coefsx);
 coepow(Scale_max+1:end,:)=[];
 coepow(1:Scale_min-1,:)=[];
 freq =freqx(Scale_min:1:Scale_max);
+
+
 %% Dealing with dissociation period
 OFF_period=zeros(size(OFF_pairs,1),2); % OFF pairs in the video 
 coepow_off=[]; % store the coefficients of WT for dissociation 
 real_time_off=[]; % correspond the real time for each period
 inter_off=[]; % dashed lines inserted to denote each period
 
+% Determine the offset between the tdms data and video data. video always
+% has some extra recording due to some time delay between turning on the
+% video recording and turning on the labview program.
+
+signal = pos(1:10*Fs,:); % Take first 10 seconds of the video data
+signal = signal - mean(signal);
+signal = abs(signal);
+S = movmean(signal,5);
+S = mean(S,2);
+S_bin = (S > (max(S)+min(S))/2);
+S_switch = diff(S_bin); % find if the field was switched
+F_ON_vid = find(S_switch,1); % Index of the video frame when field was switched on
+OffSet = F_ON_vid - find((t>OFF_pairs(1,2)),1,'first')-1;
+
 for i=1: size(OFF_pairs,1)
-OFF_period(i,1) = find((t>=OFF_pairs(i,1)),1,'first'); % find the start point for OFF period i
-OFF_period(i,2) = find((t<=OFF_pairs(i,2)),1,'last'); % find the end poingt for OFF period i
+OFF_period(i,1) = find((t>=OFF_pairs(i,1)),1,'first')+OffSet; % find the start point for OFF period i
+OFF_period(i,2) = find((t<=OFF_pairs(i,2)),1,'last')+OffSet; % find the end poingt for OFF period i
 coepow_off=[coepow_off coepow(:,OFF_period(i,1):OFF_period(i,2))]; % get the coefficients for the OFF period i
 tt=linspace(OFF_pairs(i,1),OFF_pairs(i,2),OFF_period(i,2)-OFF_period(i,1)+1); % get the real time
 real_time_off=[real_time_off tt]; % collect real time for fields off
