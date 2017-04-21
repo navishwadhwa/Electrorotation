@@ -40,6 +40,7 @@ obj = VideoReader(video_path); %read the objects
 % get the height and width for the video
 vidHeight = obj.Height;
 vidWidth = obj.Width;
+vidFrames = obj.Duration*obj.FrameRate;
 % set a struct for store the data
 s = struct('cdata',zeros(vidHeight,vidWidth,3,'uint8'),...
     'graydata',zeros(vidHeight,vidWidth,1,'uint8'),...
@@ -48,15 +49,17 @@ s = struct('cdata',zeros(vidHeight,vidWidth,3,'uint8'),...
    numFrame = 1; 
 
 while hasFrame(obj)
+    clc
+    disp(['Loading video ' strcat(num2str(numFrame/vidFrames),'%')])
     %waitbar(numFram/)
     s(numFrame).cdata = readFrame(obj);
     s(numFrame).graydata = rgb2gray(s(numFrame).cdata); % convert rgb to gray image
     % use the averaging filter mode to denoise the image
-    s(numFrame).denoi_graydata = filter2(fspecial('average',7),s(numFrame).graydata)/255; 
+%     s(numFrame).denoi_graydata = filter2(fspecial('average',7),s(numFrame).graydata); 
    %s(numFrame).bwdata = imbinarize(s(numFrame).denoi_graydata,thre);
    
     % convert the unit8 format to double for the gray image
-    s(numFrame).dvalue = im2double(s(numFrame).denoi_graydata);
+%     s(numFrame).dvalue = im2double(s(numFrame).denoi_graydata);
     numFrame = numFrame+1;
 end
 numFrame = numFrame-1; % minus one since count one more for the number of Frame
@@ -107,12 +110,14 @@ ON_pairs=((ON_pairs-1)./fs);
 
 
  %% Tracking the center of the cell in the video
-waitbar(3,'Loading the tdms files, please wait...');
+% waitbar(3,'Loading the tdms files, please wait...');
 pos=zeros(numFrame,2); %two columns, the first is x position, the second is y position.
-thre=0.25; % the threshhold for center calculating 
+% thre=0.25; % the threshhold for center calculating 
 for i=1:numFrame
-    pic=s(i).dvalue;
-    pos(i,:)=center(pic,thre); % center is a customed function to find the center of the cell in the image.
+    clc
+    disp(['Processing video ' strcat(num2str(i/vidFrames),'%')]);
+    pic=s(i).graydata;
+    pos(i,:)=center(pic); % center is a customed function to find the center of the cell in the image.
 end
 
 %% Apply wavelet transform 
@@ -147,14 +152,19 @@ inter_off=[]; % dashed lines inserted to denote each period
 % video recording and turning on the labview program.
 
 signal = pos(1:10*Fs,:); % Take first 10 seconds of the video data
-signal = signal - mean(signal);
-signal = abs(signal);
-S = movmean(signal,5);
-S = mean(S,2);
+signal = signal - movmean(signal,5);
+wl = 1;
+num_switch = 10;
+while num_switch > 1
+[up,lo] = envelope(signal,wl,'rms');
+S = mean(up-lo,2);
 S_bin = (S > (max(S)+min(S))/2);
 S_switch = diff(S_bin); % find if the field was switched
+num_switch = sum(abs(S_switch));
 F_ON_vid = find(S_switch,1); % Index of the video frame when field was switched on
-OffSet = F_ON_vid - find((t>OFF_pairs(1,2)),1,'first')-1;
+wl = wl+1;
+end
+OffSet = F_ON_vid - find((t>OFF_pairs(1,2)),1,'first')-1
 
 for i=1: size(OFF_pairs,1)
 OFF_period(i,1) = find((t>=OFF_pairs(i,1)),1,'first')+OffSet; % find the start point for OFF period i
